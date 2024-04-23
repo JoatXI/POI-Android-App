@@ -43,6 +43,33 @@ import androidx.navigation.compose.rememberNavController
 import com.example.omoohwo.ui.theme.OmoohwoTheme
 import android.Manifest
 import android.location.Location
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -50,11 +77,15 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
 data class LatLon(var lat: Double, var lon: Double)
-class MainActivity : ComponentActivity(), LocationListener {
 
+@OptIn(ExperimentalMaterial3Api::class)
+class MainActivity : ComponentActivity(), LocationListener {
+    lateinit var db : PoiDatabase
     val latLonViewModel : GpsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        db = PoiDatabase.getDatabase(application)
+
         super.onCreate(savedInstanceState)
 
         setContent {
@@ -63,14 +94,32 @@ class MainActivity : ComponentActivity(), LocationListener {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val navController = rememberNavController()
 
-                    NavHost(navController=navController, startDestination="homeScreen") {
-                        composable("homeScreen") {
-                            HomeScreenComposable(settingsMenu ={
-                                navController.navigate("settingsScreen")
-                            })
+                    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                    val coroutineScope = rememberCoroutineScope()
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        drawerContent = {
+                            ModalDrawerSheet {
+                                NavigationDrawerItem(
+                                    selected = false,
+                                    label = { Text("Add POI") },
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            drawerState.close()
+                                        }
+                                        navController.navigate("settingsScreen")
+                                    }
+                                )
+                            }
                         }
-                        composable("settingsScreen") {
-                            SettingsComposable(onSettingsUpdated = { lat, lon, openTopo -> })
+                    ) {
+                        NavHost(navController=navController, startDestination="homeScreen") {
+                            composable("homeScreen") {
+                                MainNavBar()
+                            }
+                            composable("settingsScreen") {
+                                SettingsComposable(onSettingsUpdated = { lat, lon, openTopo -> })
+                            }
                         }
                     }
                 }
@@ -122,7 +171,70 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun HomeScreenComposable(settingsMenu: () -> Unit) {
+    fun MainNavBar() {
+        Scaffold(
+            topBar = {
+                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                val coroutineScope = rememberCoroutineScope()
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    title = {
+                        Text("Points Of Interest App")
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            coroutineScope.launch {
+                                if(drawerState.isClosed) {
+                                    drawerState.open()
+                                } else {
+                                    drawerState.close()
+                                }
+                            }
+                        }) {
+                            Icon(imageVector = Icons.Filled.Menu, "Menu")
+                        }
+                    }
+                )
+            },
+            floatingActionButton = {
+                val navController = rememberNavController()
+                FloatingActionButton(
+                    onClick = { navController.navigate("addPoi") },
+                    content = {
+                        Icon(imageVector = Icons.Filled.Add, contentDescription = "Add POI")
+                    }
+                )
+            },
+            bottomBar = {
+                val navController = rememberNavController()
+                NavigationBar {
+                    NavigationBarItem(
+                        icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = "Home") },
+                        label = { Text("Home") },
+                        selected = true,
+                        onClick = { navController.navigate("home") }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(imageVector = Icons.Filled.Add, contentDescription = "Add POI") },
+                        label = { Text("Add POI") },
+                        selected = false,
+                        onClick = { navController.navigate("addPoi") }
+                    )
+                }
+            }
+        ) { innerPadding ->
+            val navController = rememberNavController()
+            HomeScreenComposable(innerPadding, settingsMenu ={
+                navController.navigate("settingsScreen")
+            })
+        }
+    }
+
+    @Composable
+    fun HomeScreenComposable(innerPaddingValues: PaddingValues, settingsMenu: () -> Unit) {
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             var latLon: LatLon by remember { mutableStateOf(LatLon(51.05, -0.72)) }
 
@@ -144,6 +256,70 @@ class MainActivity : ComponentActivity(), LocationListener {
                         Button( onClick ={ settingsMenu() }) { Text("SETTINGS") }
                     }
                 }
+            }
+        }
+    }
+
+    @Composable
+    fun InputComposable() {
+        Column(modifier = Modifier.fillMaxSize()) {
+            var id by remember { mutableStateOf("") }
+            var artistName by remember { mutableStateOf("") }
+            var songTitle by remember { mutableStateOf("") }
+            var desc by remember { mutableStateOf("") }
+
+            var result by remember { mutableIntStateOf(0) }
+            var res by remember { mutableIntStateOf(0) }
+            var location: Poi by remember { mutableStateOf(Poi(name = "", type = "", description = "")) }
+
+            Column {
+                TextField(value = id, onValueChange = {id=it})
+                TextField(value = artistName, onValueChange = {artistName=it})
+                TextField(value = songTitle, onValueChange = {songTitle=it})
+                TextField(value = desc, onValueChange = {desc=it})
+            }
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = {
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            val newPoi = Poi(name = artistName, type =  songTitle, description =  desc)
+                            id = db.poiDao().insert(newPoi).toString()
+                        }
+                    }
+                }) { Text("ADD SONG")}
+                Text(id)
+
+                Button(onClick = {
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            location = db.poiDao().getPoiById(id.toLong())!!
+                        }
+                    }
+                }) { Text("FIND SONG")}
+                Text(location.toString())
+            }
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = {
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            val updPoi = Poi(id = id.toLong(), name = artistName, type = songTitle, description = desc)
+                            result = db.poiDao().update(updPoi)
+                        }
+                    }
+                }) { Text("UPDATE SONG")}
+                Text(result.toString())
+
+                Button(onClick = {
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            val delSong = Poi(id = id.toLong(), name = artistName, type = songTitle, description = desc)
+                            res = db.poiDao().delete(delSong)
+                        }
+                    }
+                }) { Text("DELETE SONG")}
+                Text(res.toString())
             }
         }
     }
