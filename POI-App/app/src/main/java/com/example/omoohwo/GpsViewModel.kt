@@ -10,4 +10,6 @@ class GpsViewModel : ViewModel() {
             latLonLiveData.value = newValue
         }
     var latLonLiveData = MutableLiveData<LatLon>()
+
+    var poiList = mutableListOf<Poi>()
 }

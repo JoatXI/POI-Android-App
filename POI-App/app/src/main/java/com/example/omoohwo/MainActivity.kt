@@ -43,6 +43,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.omoohwo.ui.theme.OmoohwoTheme
 import android.Manifest
 import android.location.Location
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
@@ -82,6 +83,7 @@ data class LatLon(var lat: Double, var lon: Double)
 class MainActivity : ComponentActivity(), LocationListener {
     lateinit var db : PoiDatabase
     val latLonViewModel : GpsViewModel by viewModels()
+    val poiViewModel : GpsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         db = PoiDatabase.getDatabase(application)
@@ -119,6 +121,9 @@ class MainActivity : ComponentActivity(), LocationListener {
                             }
                             composable("settingsScreen") {
                                 SettingsComposable(onSettingsUpdated = { lat, lon, openTopo -> })
+                            }
+                            composable("addPoi") {
+                                AddPoi()
                             }
                         }
                     }
@@ -186,10 +191,13 @@ class MainActivity : ComponentActivity(), LocationListener {
                     },
                     actions = {
                         IconButton(onClick = {
+                            Log.d("madassignment", "clicked menu icon")
                             coroutineScope.launch {
                                 if(drawerState.isClosed) {
+                                    Log.d("madassignment", "drawer is closed, opening it")
                                     drawerState.open()
                                 } else {
+                                    Log.d("madassignment", "drawer is open, closing it")
                                     drawerState.close()
                                 }
                             }
@@ -226,6 +234,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                 }
             }
         ) { innerPadding ->
+            // NavigationDrawer and your NavHost
             val navController = rememberNavController()
             HomeScreenComposable(innerPadding, settingsMenu ={
                 navController.navigate("settingsScreen")
@@ -261,65 +270,23 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun InputComposable() {
+    fun AddPoi() {
         Column(modifier = Modifier.fillMaxSize()) {
-            var id by remember { mutableStateOf("") }
-            var artistName by remember { mutableStateOf("") }
-            var songTitle by remember { mutableStateOf("") }
+            var poiName by remember { mutableStateOf("") }
+            var type by remember { mutableStateOf("") }
             var desc by remember { mutableStateOf("") }
 
-            var result by remember { mutableIntStateOf(0) }
-            var res by remember { mutableIntStateOf(0) }
-            var location: Poi by remember { mutableStateOf(Poi(name = "", type = "", description = "")) }
-
             Column {
-                TextField(value = id, onValueChange = {id=it})
-                TextField(value = artistName, onValueChange = {artistName=it})
-                TextField(value = songTitle, onValueChange = {songTitle=it})
-                TextField(value = desc, onValueChange = {desc=it})
+                TextField(value = poiName, onValueChange = { poiName = it })
+                TextField(value = type, onValueChange = { type = it })
+                TextField(value = desc, onValueChange = { desc = it })
             }
 
             Row(modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = {
-                    lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            val newPoi = Poi(name = artistName, type =  songTitle, description =  desc)
-                            id = db.poiDao().insert(newPoi).toString()
-                        }
-                    }
-                }) { Text("ADD SONG")}
-                Text(id)
-
-                Button(onClick = {
-                    lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            location = db.poiDao().getPoiById(id.toLong())!!
-                        }
-                    }
-                }) { Text("FIND SONG")}
-                Text(location.toString())
-            }
-
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = {
-                    lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            val updPoi = Poi(id = id.toLong(), name = artistName, type = songTitle, description = desc)
-                            result = db.poiDao().update(updPoi)
-                        }
-                    }
-                }) { Text("UPDATE SONG")}
-                Text(result.toString())
-
-                Button(onClick = {
-                    lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            val delSong = Poi(id = id.toLong(), name = artistName, type = songTitle, description = desc)
-                            res = db.poiDao().delete(delSong)
-                        }
-                    }
-                }) { Text("DELETE SONG")}
-                Text(res.toString())
+                val newPoi = Poi(name = poiName, type = type, description = desc)
+                Button(onClick = { poiViewModel.poiList.add(newPoi) }) {
+                    Text("Add Poi")
+                }
             }
         }
     }
