@@ -51,6 +51,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -68,6 +69,9 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavController
+import androidx.navigation.NavHostController
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -94,39 +98,11 @@ class MainActivity : ComponentActivity(), LocationListener {
             OmoohwoTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    val navController = rememberNavController()
-
                     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                    val navController = rememberNavController()
                     val coroutineScope = rememberCoroutineScope()
-                    ModalNavigationDrawer(
-                        drawerState = drawerState,
-                        drawerContent = {
-                            ModalDrawerSheet {
-                                NavigationDrawerItem(
-                                    selected = false,
-                                    label = { Text("Add POI") },
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            drawerState.close()
-                                        }
-                                        navController.navigate("settingsScreen")
-                                    }
-                                )
-                            }
-                        }
-                    ) {
-                        NavHost(navController=navController, startDestination="homeScreen") {
-                            composable("homeScreen") {
-                                MainNavBar()
-                            }
-                            composable("settingsScreen") {
-                                SettingsComposable(onSettingsUpdated = { lat, lon, openTopo -> })
-                            }
-                            composable("addPoi") {
-                                AddPoi()
-                            }
-                        }
-                    }
+
+                    MainNavBar(drawerState, navController, coroutineScope)
                 }
             }
         }
@@ -176,11 +152,9 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun MainNavBar() {
+    fun MainNavBar(drawerState: DrawerState, navController: NavController, coroutineScope: CoroutineScope) {
         Scaffold(
             topBar = {
-                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-                val coroutineScope = rememberCoroutineScope()
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -208,7 +182,6 @@ class MainActivity : ComponentActivity(), LocationListener {
                 )
             },
             floatingActionButton = {
-                val navController = rememberNavController()
                 FloatingActionButton(
                     onClick = { navController.navigate("addPoi") },
                     content = {
@@ -217,13 +190,12 @@ class MainActivity : ComponentActivity(), LocationListener {
                 )
             },
             bottomBar = {
-                val navController = rememberNavController()
                 NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = "Home") },
                         label = { Text("Home") },
                         selected = true,
-                        onClick = { navController.navigate("home") }
+                        onClick = { navController.navigate("homeScreen") }
                     )
                     NavigationBarItem(
                         icon = { Icon(imageVector = Icons.Filled.Add, contentDescription = "Add POI") },
@@ -235,10 +207,43 @@ class MainActivity : ComponentActivity(), LocationListener {
             }
         ) { innerPadding ->
             // NavigationDrawer and your NavHost
-            val navController = rememberNavController()
-            HomeScreenComposable(innerPadding, settingsMenu ={
-                navController.navigate("settingsScreen")
-            })
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ModalDrawerSheet(modifier = Modifier.padding(innerPadding)) {
+                        NavigationDrawerItem(
+                            selected = false,
+                            label = { Text("Add POI") },
+                            onClick = {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                navController.navigate("addPoi")
+                            }
+                        )
+                    }
+                }
+            ) {
+                NavHost(navController= navController as NavHostController, startDestination="homeScreen") {
+                    composable("homeScreen") {
+                        HomeScreenComposable(innerPadding, settingsMenu ={
+                            navController.navigate("settingsScreen")
+                        })
+                    }
+                    composable("settingsScreen") {
+                        SettingsComposable(innerPadding, onCallBack = {
+                            navController.navigate("homeScreen")
+                        })
+                    }
+                    composable("addPoi") {
+                        AddPoi(innerPadding, homeMenu = {
+                            navController.navigate("homeScreen")
+                        }) {
+                            poi ->
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -248,7 +253,9 @@ class MainActivity : ComponentActivity(), LocationListener {
             var latLon: LatLon by remember { mutableStateOf(LatLon(51.05, -0.72)) }
 
             latLonViewModel.latLonLiveData.observe(this) { latLon = it } // "it" is the LatLon being observed and used to update user's location to the UI
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            BoxWithConstraints(modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPaddingValues)) {
                 val mapHeight = this.maxHeight - 50.dp
 
                 MapComposable(GeoPoint(latLon.lat, latLon.lon), modifier = Modifier
@@ -270,22 +277,37 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun AddPoi() {
+    fun AddPoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit, onPoiAdded: (Poi) -> Unit) {
         Column(modifier = Modifier.fillMaxSize()) {
             var poiName by remember { mutableStateOf("") }
             var type by remember { mutableStateOf("") }
             var desc by remember { mutableStateOf("") }
 
-            Column {
-                TextField(value = poiName, onValueChange = { poiName = it })
-                TextField(value = type, onValueChange = { type = it })
-                TextField(value = desc, onValueChange = { desc = it })
-            }
+            BoxWithConstraints(modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPaddingValues)) {
 
-            Row(modifier = Modifier.fillMaxWidth()) {
-                val newPoi = Poi(name = poiName, type = type, description = desc)
-                Button(onClick = { poiViewModel.poiList.add(newPoi) }) {
-                    Text("Add Poi")
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier
+                    .fillMaxSize()) {
+                    Column(modifier = Modifier
+                        .fillMaxSize()
+                        .padding(5.dp)) {
+                        TextField(value = poiName, onValueChange = { poiName = it })
+                        TextField(value = type, onValueChange = { type = it })
+                        TextField(value = desc, onValueChange = { desc = it })
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val newPoi = Poi(name = poiName, type = type, description = desc)
+                            Button(onClick = {
+                                onPoiAdded(newPoi)
+                                poiViewModel.poiList.add(newPoi) }) {
+                                Text("Add Poi")
+                            }
+                            Button(onClick = { homeMenu() }) {
+                                Text("Back")
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -312,27 +334,37 @@ fun MapComposable(geoPoint: GeoPoint, modifier: Modifier) {
 }
 
 @Composable
-fun SettingsComposable(onSettingsUpdated: (Double, Double, Boolean) -> Unit) {
-    Column {
-        var lat by remember { mutableStateOf("") }
-        var lon by remember { mutableStateOf("") }
+fun SettingsComposable(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
 
-        Row {
-            TextField(value = lat, onValueChange = {lat=it}, modifier = Modifier
-                .weight(1.0f)
-                .zIndex(2.0f)
-                .padding(end = 2.dp))
-            TextField(value = lon, onValueChange = {lon=it}, modifier = Modifier
-                .weight(1.0f)
-                .zIndex(2.0f)
-                .padding(start = 2.dp))
-        }
+    BoxWithConstraints(modifier = Modifier
+        .fillMaxSize()
+        .padding(innerPaddingValues)) {
+        Column {
+            var lat by remember { mutableStateOf("") }
+            var lon by remember { mutableStateOf("") }
 
-        var openTopo by remember { mutableStateOf(false) }
+            Row {
+                TextField(value = lat, onValueChange = {lat=it}, modifier = Modifier
+                    .weight(1.0f)
+                    .zIndex(2.0f)
+                    .padding(end = 2.dp))
+                TextField(value = lon, onValueChange = {lon=it}, modifier = Modifier
+                    .weight(1.0f)
+                    .zIndex(2.0f)
+                    .padding(start = 2.dp))
+            }
 
-        Row(modifier = Modifier.align(Alignment.End)) {
-            Switch(modifier = Modifier.padding(end = 240.dp), checked = openTopo, onCheckedChange = { openTopo=it})
-            Button(modifier = Modifier.padding(end = 4.dp), onClick = {onSettingsUpdated(lat.toDouble(), lon.toDouble(), openTopo)}) { Text("Update") }
+            var openTopo by remember { mutableStateOf(false) }
+
+            Row(modifier = Modifier.align(Alignment.End)) {
+                Switch(modifier = Modifier.padding(end = 240.dp), checked = openTopo, onCheckedChange = { openTopo=it})
+                Button(modifier = Modifier.padding(end = 4.dp), onClick = { lat.toDouble(); lon.toDouble() }) {
+                    Text("Update")
+                }
+                Button(onClick = { onCallBack() }) {
+                    Text("Back")
+                }
+            }
         }
     }
 }
