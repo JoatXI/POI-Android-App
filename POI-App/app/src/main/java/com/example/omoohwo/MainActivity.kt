@@ -147,7 +147,8 @@ class MainActivity : ComponentActivity(), LocationListener {
         Toast.makeText(this, "GPS disabled", Toast.LENGTH_LONG).show() // handles the situation of a user turning the GPS off
     }
 
-    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) { // this function is outdated for API 29(Android 10) and above hence, it will be ignored. Nonetheless, it is required even though it does nothing because when excluded the application crashes on device API lower than 29 (Android 9 or older).
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) { // this function is outdated for API 29(Android 10) and above hence, it will be ignored.
+    // Nonetheless, it is required even though it does nothing because when excluded the application crashes on device API lower than 29 (Android 9 or older).
         // doNothing
     }
 
@@ -279,6 +280,10 @@ class MainActivity : ComponentActivity(), LocationListener {
     @Composable
     fun AddPoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit, onPoiAdded: (Poi) -> Unit) {
         Column(modifier = Modifier.fillMaxSize()) {
+
+            val lat = latLonViewModel.latLon.lat
+            val  lon = latLonViewModel.latLon.lon
+
             var poiName by remember { mutableStateOf("") }
             var type by remember { mutableStateOf("") }
             var desc by remember { mutableStateOf("") }
@@ -287,8 +292,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                 .fillMaxSize()
                 .padding(innerPaddingValues)) {
 
-                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier
-                    .fillMaxSize()) {
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
                     Column(modifier = Modifier
                         .fillMaxSize()
                         .padding(5.dp)) {
@@ -297,7 +301,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                         TextField(value = desc, onValueChange = { desc = it })
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val newPoi = Poi(name = poiName, type = type, description = desc)
+                            val newPoi = Poi(name = poiName, type = type, description = desc, latitude = lat, longitude = lon)
                             Button(onClick = {
                                 onPoiAdded(newPoi)
                                 poiViewModel.poiList.add(newPoi) }) {
