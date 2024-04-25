@@ -67,6 +67,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
@@ -239,9 +240,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                     composable("addPoi") {
                         AddPoi(innerPadding, homeMenu = {
                             navController.navigate("homeScreen")
-                        }) {
-                            poi ->
-                        }
+                        })
                     }
                 }
             }
@@ -252,14 +251,18 @@ class MainActivity : ComponentActivity(), LocationListener {
     fun HomeScreenComposable(innerPaddingValues: PaddingValues, settingsMenu: () -> Unit) {
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             var latLon: LatLon by remember { mutableStateOf(LatLon(51.05, -0.72)) }
+            var poi by remember { mutableStateOf(listOf<Poi>()) }
 
+            poiViewModel.poiListLiveData.observe(this) {
+                Log.d("addpoi", "live data updated")
+                        poi = it }
             latLonViewModel.latLonLiveData.observe(this) { latLon = it } // "it" is the LatLon being observed and used to update user's location to the UI
             BoxWithConstraints(modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPaddingValues)) {
                 val mapHeight = this.maxHeight - 50.dp
 
-                MapComposable(GeoPoint(latLon.lat, latLon.lon), modifier = Modifier
+                MapComposable(poi, GeoPoint(latLon.lat, latLon.lon), modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .height(mapHeight))
 
@@ -278,7 +281,7 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun AddPoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit, onPoiAdded: (Poi) -> Unit) {
+    fun AddPoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             val lat = latLonViewModel.latLon.lat
@@ -303,8 +306,8 @@ class MainActivity : ComponentActivity(), LocationListener {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val newPoi = Poi(name = poiName, type = type, description = desc, latitude = lat, longitude = lon)
                             Button(onClick = {
-                                onPoiAdded(newPoi)
-                                poiViewModel.poiList.add(newPoi) }) {
+                                Log.d("addpoi", "geopoint: lat: ${lat}, lon: ${lon}")
+                                poiViewModel.addPoi(newPoi); homeMenu() }) {
                                 Text("Add Poi")
                             }
                             Button(onClick = { homeMenu() }) {
@@ -319,7 +322,7 @@ class MainActivity : ComponentActivity(), LocationListener {
 }
 
 @Composable
-fun MapComposable(geoPoint: GeoPoint, modifier: Modifier) {
+fun MapComposable(poi: List<Poi>, geoPoint: GeoPoint, modifier: Modifier) {
     AndroidView(modifier = Modifier, factory = { ctx  -> Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx))
 
         val map1 = MapView(ctx).apply {
@@ -328,11 +331,13 @@ fun MapComposable(geoPoint: GeoPoint, modifier: Modifier) {
             controller.setZoom(14.0)
         }
         val marker = Marker(map1)
-        marker.apply {
-            position = GeoPoint(51.05, -0.72)
-            title = "Fernhurst, village in West Sussex"
+        poi.forEach {
+            marker.apply {
+                position = GeoPoint(it.latitude, it.longitude)
+                title = "${it.name}, ${it.description}"
+            }
+            map1.overlays.add(marker)
         }
-        map1.overlays.add(marker)
         map1
     }, update = { view -> view.controller.setCenter(geoPoint) })
 }
