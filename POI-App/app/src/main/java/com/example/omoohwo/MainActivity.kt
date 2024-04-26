@@ -44,7 +44,7 @@ import com.example.omoohwo.ui.theme.OmoohwoTheme
 import android.Manifest
 import android.location.Location
 import android.util.Log
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -238,9 +238,7 @@ class MainActivity : ComponentActivity(), LocationListener {
             ) {
                 NavHost(navController= navController as NavHostController, startDestination="homeScreen") {
                     composable("homeScreen") {
-                        HomeScreenComposable(innerPadding, settingsMenu ={
-                            navController.navigate("settingsScreen")
-                        })
+                        HomeScreenComposable(innerPadding)
                     }
                     composable("settingsScreen") {
                         SettingsComposable(innerPadding, onCallBack = {
@@ -263,23 +261,18 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun HomeScreenComposable(innerPaddingValues: PaddingValues, settingsMenu: () -> Unit) {
+    fun HomeScreenComposable(innerPaddingValues: PaddingValues) {
         Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
             var latLon: LatLon by remember { mutableStateOf(LatLon(51.05, -0.72)) }
             var poi by remember { mutableStateOf(listOf<Poi>()) }
+            var currList by remember { mutableStateOf(listOf<Poi>()) }
 
-            poiViewModel.poiListLiveData.observe(this) {
-                Log.d("addpoi", "live data updated")
-                        poi = it }
+            poiViewModel.poiListLiveData.observe(this) { poi = it }
             latLonViewModel.latLonLiveData.observe(this) { latLon = it } // "it" is the LatLon being observed and used to update user's location to the UI
             BoxWithConstraints(modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPaddingValues)) {
                 val mapHeight = this.maxHeight - 50.dp
-
-                MapComposable(poi, GeoPoint(latLon.lat, latLon.lon), modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .height(mapHeight))
 
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier
                     .zIndex(2.0f)
@@ -288,9 +281,17 @@ class MainActivity : ComponentActivity(), LocationListener {
                     .border(1.dp, Color.Black)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Text("Latitude: ${latLon.lat}, Longitude: ${latLon.lon}")
-                        Button( onClick ={ settingsMenu() }) { Text("SETTINGS") }
+                        Button( onClick ={
+                            lifecycleScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    currList = db.poiDao().getAllPoi()
+                                    Log.d("loadpoi", "curr poi: $currList")
+                                }
+                            }
+                        }) { Text("Load All POIs") }
                     }
                 }
+                MapComposable(poi, currList, GeoPoint(latLon.lat, latLon.lon), modifier = Modifier.align(Alignment.BottomCenter).height(mapHeight))
             }
         }
     }
@@ -350,13 +351,26 @@ class MainActivity : ComponentActivity(), LocationListener {
                 var id by remember { mutableStateOf("") }
                 val currList = poiViewModel.getPois()
 
-                Column(modifier = Modifier.fillMaxSize().padding(2.dp)) {
-                    Text("Select the save button to save all POIs")
-                    Row() {
+                Column(modifier = Modifier
+                    .fillMaxSize()
+                    .padding(5.dp)) {
+
+                    Column(modifier = Modifier
+                        .height(50.dp)
+                        .background(Color.Cyan)
+                        .fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("SELECT THE SAVE BUTTON TO SAVE ALL POIs")
+                    }
+
+                    Row(modifier = Modifier
+                        .padding(5.dp)
+                        .fillMaxSize()) {
+
                         Button(onClick = {
                             lifecycleScope.launch {
                                 withContext(Dispatchers.IO) {
                                     currList.forEach {
+                                        Log.d("savepoi", "curr poi: $currList")
                                         id = db.poiDao().insert(it).toString()
                                     }
                                 }
@@ -364,12 +378,14 @@ class MainActivity : ComponentActivity(), LocationListener {
                         }) {
                             Text("Save All POIs")
                         }
-                        Text("POIs saved successfully: $id")
-                    }
-
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Button(onClick = { homeMenu() }) {
                             Text("Go Back")
+                        }
+
+                        if(id != "") {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("POIs saved successfully: $id")
+                            }
                         }
                     }
                 }
@@ -379,7 +395,7 @@ class MainActivity : ComponentActivity(), LocationListener {
 }
 
 @Composable
-fun MapComposable(poi: List<Poi>, geoPoint: GeoPoint, modifier: Modifier) {
+fun MapComposable(poi: List<Poi>, load: List<Poi>, geoPoint: GeoPoint, modifier: Modifier) {
     AndroidView(modifier = Modifier, factory = { ctx  -> Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx))
 
         val map1 = MapView(ctx).apply {
@@ -389,6 +405,14 @@ fun MapComposable(poi: List<Poi>, geoPoint: GeoPoint, modifier: Modifier) {
         }
         val marker = Marker(map1)
         poi.forEach {
+            marker.apply {
+                position = GeoPoint(it.latitude, it.longitude)
+                title = "${it.name}, ${it.description}"
+            }
+            map1.overlays.add(marker)
+        }
+        Log.d("mapview", "currList: $load")
+        load.forEach {
             marker.apply {
                 position = GeoPoint(it.latitude, it.longitude)
                 title = "${it.name}, ${it.description}"
