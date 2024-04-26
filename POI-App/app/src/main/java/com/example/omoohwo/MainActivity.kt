@@ -223,6 +223,16 @@ class MainActivity : ComponentActivity(), LocationListener {
                                 navController.navigate("addPoi")
                             }
                         )
+                        NavigationDrawerItem(
+                            selected = false,
+                            label = { Text("Save All POIs") },
+                            onClick = {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                navController.navigate("savePoi")
+                            }
+                        )
                     }
                 }
             ) {
@@ -239,6 +249,11 @@ class MainActivity : ComponentActivity(), LocationListener {
                     }
                     composable("addPoi") {
                         AddPoi(innerPadding, homeMenu = {
+                            navController.navigate("homeScreen")
+                        })
+                    }
+                    composable("savePoi") {
+                        SavePoi(innerPadding, homeMenu = {
                             navController.navigate("homeScreen")
                         })
                     }
@@ -313,6 +328,48 @@ class MainActivity : ComponentActivity(), LocationListener {
                             Button(onClick = { homeMenu() }) {
                                 Text("Back")
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun SavePoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit) {
+        BoxWithConstraints(modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPaddingValues)) {
+            val mapHeight = this.maxHeight - 50.dp
+
+            Surface(modifier = Modifier
+                .fillMaxSize()
+                .height(mapHeight)
+                .border(1.dp, Color.Black)) {
+
+                var id by remember { mutableStateOf("") }
+                val currList = poiViewModel.getPois()
+
+                Column(modifier = Modifier.fillMaxSize().padding(2.dp)) {
+                    Text("Select the save button to save all POIs")
+                    Row() {
+                        Button(onClick = {
+                            lifecycleScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    currList.forEach {
+                                        id = db.poiDao().insert(it).toString()
+                                    }
+                                }
+                            }
+                        }) {
+                            Text("Save All POIs")
+                        }
+                        Text("POIs saved successfully: $id")
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Button(onClick = { homeMenu() }) {
+                            Text("Go Back")
                         }
                     }
                 }

@@ -23,4 +23,8 @@ class GpsViewModel : ViewModel() {
         // update the live data to ensure that it's tracking the new live list
         poiListLiveData.value = poiList
     }
+
+    fun getPois(): List<Poi> {
+        return poiList
+    }
 }
