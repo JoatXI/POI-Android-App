@@ -69,6 +69,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.view.forEach
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
@@ -137,7 +138,7 @@ class MainActivity : ComponentActivity(), LocationListener {
 
     override fun onLocationChanged(location: Location) {
         latLonViewModel.latLon = LatLon(location.latitude, location.longitude)
-        Toast.makeText(this, "Latitude: ${location.latitude}, Longitude: ${location.longitude}", Toast.LENGTH_LONG).show() // this displays the new/current GPS location of the user using a Toast pop up
+        //Toast.makeText(this, "Latitude: ${location.latitude}, Longitude: ${location.longitude}", Toast.LENGTH_LONG).show() // this displays the new/current GPS location of the user using a Toast pop up
     }
 
     override fun onProviderEnabled(provider: String) {
@@ -286,12 +287,16 @@ class MainActivity : ComponentActivity(), LocationListener {
                                 withContext(Dispatchers.IO) {
                                     currList = db.poiDao().getAllPoi()
                                     Log.d("loadpoi", "curr poi: $currList")
+                                    Log.d("assignmentpois", "Updating state variable: $currList")
                                 }
                             }
                         }) { Text("Load All POIs") }
                     }
                 }
-                MapComposable(poi, currList, GeoPoint(latLon.lat, latLon.lon), modifier = Modifier.align(Alignment.BottomCenter).height(mapHeight))
+                Log.d("assignmentpois", "re-rendering MapComposable with $currList")
+                MapComposable(poi, currList, GeoPoint(latLon.lat, latLon.lon), modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .height(mapHeight))
             }
         }
     }
@@ -384,8 +389,10 @@ class MainActivity : ComponentActivity(), LocationListener {
 
                         if(id != "") {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("POIs saved successfully: $id")
+                                //Text("POIs saved successfully: $id")
+
                             }
+                            Toast.makeText(this@MainActivity, "POIs saved successfully: $id", Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -403,24 +410,28 @@ fun MapComposable(poi: List<Poi>, load: List<Poi>, geoPoint: GeoPoint, modifier:
             setTileSource(TileSourceFactory.MAPNIK)
             controller.setZoom(14.0)
         }
-        val marker = Marker(map1)
+
+        map1
+    }, update = { view ->
+        view.controller.setCenter(geoPoint)
         poi.forEach {
+            val marker = Marker(view)
             marker.apply {
                 position = GeoPoint(it.latitude, it.longitude)
                 title = "${it.name}, ${it.description}"
             }
-            map1.overlays.add(marker)
+            view.overlays.add(marker)
         }
         Log.d("mapview", "currList: $load")
         load.forEach {
+            val marker = Marker(view)
             marker.apply {
                 position = GeoPoint(it.latitude, it.longitude)
                 title = "${it.name}, ${it.description}"
             }
-            map1.overlays.add(marker)
+            view.overlays.add(marker)
         }
-        map1
-    }, update = { view -> view.controller.setCenter(geoPoint) })
+    })
 }
 
 @Composable
