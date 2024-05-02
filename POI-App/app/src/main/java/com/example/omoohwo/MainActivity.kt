@@ -2,7 +2,6 @@ package com.example.omoohwo
 
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.health.connect.datatypes.ExerciseRoute
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
@@ -46,11 +45,11 @@ import android.location.Location
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,10 +65,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.core.view.forEach
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
@@ -82,6 +78,11 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import com.github.kittinunf.fuel.httpGet
+import com.github.kittinunf.fuel.json.responseJson // for JSON - uncomment when needed
+import com.github.kittinunf.fuel.gson.responseObject // for GSON - uncomment when needed
+import com.github.kittinunf.fuel.httpPost
+import com.github.kittinunf.result.Result
 
 data class LatLon(var lat: Double, var lon: Double)
 
@@ -226,12 +227,33 @@ class MainActivity : ComponentActivity(), LocationListener {
                         )
                         NavigationDrawerItem(
                             selected = false,
+                            label = { Text("Load POIs from Web") },
+                            onClick = {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                navController.navigate("webPoi")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            selected = false,
                             label = { Text("Save All POIs") },
                             onClick = {
                                 coroutineScope.launch {
                                     drawerState.close()
                                 }
                                 navController.navigate("savePoi")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            selected = false,
+                            label = { Text("Settings") },
+                            icon = {Icons.Filled.Settings},
+                            onClick = {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                navController.navigate("settingsScreen")
                             }
                         )
                     }
@@ -253,6 +275,11 @@ class MainActivity : ComponentActivity(), LocationListener {
                     }
                     composable("savePoi") {
                         SavePoi(innerPadding, homeMenu = {
+                            navController.navigate("homeScreen")
+                        })
+                    }
+                    composable("webPoi") {
+                        WebPoi(innerPadding, homeMenu =  {
                             navController.navigate("homeScreen")
                         })
                     }
@@ -388,13 +415,58 @@ class MainActivity : ComponentActivity(), LocationListener {
                         }
 
                         if(id != "") {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                //Text("POIs saved successfully: $id")
-
-                            }
                             Toast.makeText(this@MainActivity, "POIs saved successfully: $id", Toast.LENGTH_LONG).show()
                         }
                     }
+                }
+            }
+        }
+    }
+
+
+    @Composable
+    fun WebPoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit) {
+        BoxWithConstraints(modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPaddingValues)) {
+            var id by remember { mutableStateOf("") }
+            var searchRes by remember { mutableStateOf("") }
+
+            Row {
+                Button(onClick = {
+                    val url = "http://10.0.2.2:3000/poi/all"
+                    url.httpGet().responseJson { request, response, result ->
+                        when(result) {
+                            is Result.Success -> {
+                                val jsonArray = result.get().array()
+                                for(i in 0 until jsonArray.length()) {
+                                    val currObj = jsonArray.getJSONObject(i)
+                                    val lat = currObj.getString("lat").toDouble()
+                                    val lon = currObj.getString("lon").toDouble()
+                                    val newPoi = Poi(name = currObj.getString("name"), type = currObj.getString("type"), description = currObj.getString("description"), latitude = lat, longitude = lon)
+
+                                    poiViewModel.addPoi(newPoi)
+                                    Toast.makeText(this@MainActivity, "Loading Web POIs...", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            is Result.Failure -> {
+                                searchRes = "Error: ${result.error.message}"
+                                Toast.makeText(this@MainActivity, searchRes, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                    val currList = poiViewModel.getPois()
+                    lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            currList.forEach {
+                                Log.d("savepoi", "curr poi: $currList")
+                                id = db.poiDao().insert(it).toString()
+                            }
+                        }
+                    }
+                    homeMenu()
+                }) {
+                    Text("View Web POIs")
                 }
             }
         }
@@ -441,27 +513,16 @@ fun SettingsComposable(innerPaddingValues: PaddingValues, onCallBack: () -> Unit
         .fillMaxSize()
         .padding(innerPaddingValues)) {
         Column {
-            var lat by remember { mutableStateOf("") }
-            var lon by remember { mutableStateOf("") }
-
-            Row {
-                TextField(value = lat, onValueChange = {lat=it}, modifier = Modifier
-                    .weight(1.0f)
-                    .zIndex(2.0f)
-                    .padding(end = 2.dp))
-                TextField(value = lon, onValueChange = {lon=it}, modifier = Modifier
-                    .weight(1.0f)
-                    .zIndex(2.0f)
-                    .padding(start = 2.dp))
-            }
+            Text("GPS Location Setting")
 
             var openTopo by remember { mutableStateOf(false) }
-
-            Row(modifier = Modifier.align(Alignment.End)) {
-                Switch(modifier = Modifier.padding(end = 240.dp), checked = openTopo, onCheckedChange = { openTopo=it})
-                Button(modifier = Modifier.padding(end = 4.dp), onClick = { lat.toDouble(); lon.toDouble() }) {
-                    Text("Update")
-                }
+            if (openTopo == true) {
+                Text("Turn on GPS Location")
+            } else {
+                Text("Turn off GPS Location")
+            }
+            Row(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Switch(checked = openTopo, onCheckedChange = { openTopo=it})
                 Button(onClick = { onCallBack() }) {
                     Text("Back")
                 }
