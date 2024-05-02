@@ -45,6 +45,7 @@ import android.location.Location
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
@@ -80,8 +81,6 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import com.github.kittinunf.fuel.httpGet
 import com.github.kittinunf.fuel.json.responseJson // for JSON - uncomment when needed
-import com.github.kittinunf.fuel.gson.responseObject // for GSON - uncomment when needed
-import com.github.kittinunf.fuel.httpPost
 import com.github.kittinunf.result.Result
 
 data class LatLon(var lat: Double, var lon: Double)
@@ -248,7 +247,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                         NavigationDrawerItem(
                             selected = false,
                             label = { Text("Settings") },
-                            icon = {Icons.Filled.Settings},
+                            icon = { Icon(imageVector = Icons.Filled.Settings, contentDescription = "Settings") },
                             onClick = {
                                 coroutineScope.launch {
                                     drawerState.close()
@@ -265,21 +264,23 @@ class MainActivity : ComponentActivity(), LocationListener {
                     }
                     composable("settingsScreen") {
                         SettingsComposable(innerPadding, onCallBack = {
-                            navController.navigate("homeScreen")
+                            navController.popBackStack()
                         })
                     }
                     composable("addPoi") {
-                        AddPoi(innerPadding, homeMenu = {
+                        AddPoi(innerPadding, onCallBack = {
+                            navController.popBackStack()
+                        }, homeMenu = {
                             navController.navigate("homeScreen")
                         })
                     }
                     composable("savePoi") {
-                        SavePoi(innerPadding, homeMenu = {
-                            navController.navigate("homeScreen")
+                        SavePoi(innerPadding, onCallBack = {
+                            navController.popBackStack()
                         })
                     }
                     composable("webPoi") {
-                        WebPoi(innerPadding, homeMenu =  {
+                        WebPoi(innerPadding, onCallBack =  {
                             navController.navigate("homeScreen")
                         })
                     }
@@ -329,7 +330,7 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun AddPoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit) {
+    fun AddPoi(innerPaddingValues: PaddingValues, onCallBack: () -> Unit, homeMenu: () -> Unit) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             val lat = latLonViewModel.latLon.lat
@@ -358,7 +359,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                                 poiViewModel.addPoi(newPoi); homeMenu() }) {
                                 Text("Add Poi")
                             }
-                            Button(onClick = { homeMenu() }) {
+                            Button(onClick = { onCallBack() }) {
                                 Text("Back")
                             }
                         }
@@ -369,7 +370,7 @@ class MainActivity : ComponentActivity(), LocationListener {
     }
 
     @Composable
-    fun SavePoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit) {
+    fun SavePoi(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
         BoxWithConstraints(modifier = Modifier
             .fillMaxSize()
             .padding(innerPaddingValues)) {
@@ -410,7 +411,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                         }) {
                             Text("Save All POIs")
                         }
-                        Button(onClick = { homeMenu() }) {
+                        Button(onClick = { onCallBack() }) {
                             Text("Go Back")
                         }
 
@@ -425,7 +426,7 @@ class MainActivity : ComponentActivity(), LocationListener {
 
 
     @Composable
-    fun WebPoi(innerPaddingValues: PaddingValues, homeMenu: () -> Unit) {
+    fun WebPoi(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
         BoxWithConstraints(modifier = Modifier
             .fillMaxSize()
             .padding(innerPaddingValues)) {
@@ -464,9 +465,39 @@ class MainActivity : ComponentActivity(), LocationListener {
                             }
                         }
                     }
-                    homeMenu()
+                    onCallBack()
                 }) {
                     Text("View Web POIs")
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun SettingsComposable(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
+
+        BoxWithConstraints(modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPaddingValues)) {
+            Column {
+                Text("GPS Location Setting")
+
+                var gpsSwitch by remember { mutableStateOf(true) }
+                if (!gpsSwitch) {
+                    Text("Turn on GPS Location")
+                } else {
+                    Text("Turn off GPS Location")
+                }
+                Row(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Switch(checked = gpsSwitch, onCheckedChange = { gpsSwitch=it })
+                    if (!gpsSwitch) {
+                        onProviderDisabled("GPS Off")
+                    } else {
+                        onProviderEnabled("GPS On")
+                    }
+                }
+                Button(onClick = { onCallBack() }) {
+                    Text("Back")
                 }
             }
         }
@@ -504,29 +535,4 @@ fun MapComposable(poi: List<Poi>, load: List<Poi>, geoPoint: GeoPoint, modifier:
             view.overlays.add(marker)
         }
     })
-}
-
-@Composable
-fun SettingsComposable(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
-
-    BoxWithConstraints(modifier = Modifier
-        .fillMaxSize()
-        .padding(innerPaddingValues)) {
-        Column {
-            Text("GPS Location Setting")
-
-            var openTopo by remember { mutableStateOf(false) }
-            if (openTopo == true) {
-                Text("Turn on GPS Location")
-            } else {
-                Text("Turn off GPS Location")
-            }
-            Row(modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Switch(checked = openTopo, onCheckedChange = { openTopo=it})
-                Button(onClick = { onCallBack() }) {
-                    Text("Back")
-                }
-            }
-        }
-    }
 }
