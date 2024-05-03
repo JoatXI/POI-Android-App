@@ -44,12 +44,16 @@ import android.Manifest
 import android.location.Location
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
@@ -81,6 +85,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import com.github.kittinunf.fuel.httpGet
 import com.github.kittinunf.fuel.json.responseJson // for JSON - uncomment when needed
+import com.github.kittinunf.fuel.httpPost
 import com.github.kittinunf.result.Result
 
 data class LatLon(var lat: Double, var lon: Double)
@@ -217,6 +222,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                         NavigationDrawerItem(
                             selected = false,
                             label = { Text("Add POI") },
+                            icon = { Icon(imageVector = Icons.Filled.Place, contentDescription = "Add") },
                             onClick = {
                                 coroutineScope.launch {
                                     drawerState.close()
@@ -227,6 +233,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                         NavigationDrawerItem(
                             selected = false,
                             label = { Text("Load POIs from Web") },
+                            icon = { Icon(imageVector = Icons.Filled.List, contentDescription = "Load") },
                             onClick = {
                                 coroutineScope.launch {
                                     drawerState.close()
@@ -236,12 +243,24 @@ class MainActivity : ComponentActivity(), LocationListener {
                         )
                         NavigationDrawerItem(
                             selected = false,
-                            label = { Text("Save All POIs") },
+                            label = { Text("Save POIs To Database") },
+                            icon = { Icon(imageVector = Icons.Filled.Favorite, contentDescription = "Save") },
                             onClick = {
                                 coroutineScope.launch {
                                     drawerState.close()
                                 }
                                 navController.navigate("savePoi")
+                            }
+                        )
+                        NavigationDrawerItem(
+                            selected = false,
+                            label = { Text("Save POIs To Web") },
+                            icon = { Icon(imageVector = Icons.Filled.FavoriteBorder, contentDescription = "Saver") },
+                            onClick = {
+                                coroutineScope.launch {
+                                    drawerState.close()
+                                }
+                                navController.navigate("webSaver")
                             }
                         )
                         NavigationDrawerItem(
@@ -279,8 +298,15 @@ class MainActivity : ComponentActivity(), LocationListener {
                             navController.popBackStack()
                         })
                     }
+                    composable("webSaver") {
+                        WebSaver(innerPadding, onCallBack = {
+                            navController.popBackStack()
+                        })
+                    }
                     composable("webPoi") {
                         WebPoi(innerPadding, onCallBack =  {
+                            navController.popBackStack()
+                        }, homeMenu = {
                             navController.navigate("homeScreen")
                         })
                     }
@@ -303,12 +329,12 @@ class MainActivity : ComponentActivity(), LocationListener {
                 .padding(innerPaddingValues)) {
                 val mapHeight = this.maxHeight - 50.dp
 
-                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier
+                Surface(color = MaterialTheme.colorScheme.primary, modifier = Modifier
                     .zIndex(2.0f)
                     .fillMaxWidth()
                     .height(50.dp)
-                    .border(1.dp, Color.Black)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    .border(.1.dp, Color.Black)) {
+                    Box(Modifier.fillMaxSize()) {
                         // Text("Latitude: ${latLon.lat}, Longitude: ${latLon.lon}")
                         Button( onClick ={
                             lifecycleScope.launch {
@@ -318,7 +344,7 @@ class MainActivity : ComponentActivity(), LocationListener {
                                     Log.d("assignmentpois", "Updating state variable: $currList")
                                 }
                             }
-                        }) { Text("Load All POIs") }
+                        }, Modifier.align(Alignment.TopCenter)) { Text("Load All POIs") }
                     }
                 }
                 Log.d("assignmentpois", "re-rendering MapComposable with $currList")
@@ -332,7 +358,6 @@ class MainActivity : ComponentActivity(), LocationListener {
     @Composable
     fun AddPoi(innerPaddingValues: PaddingValues, onCallBack: () -> Unit, homeMenu: () -> Unit) {
         Column(modifier = Modifier.fillMaxSize()) {
-
             val lat = latLonViewModel.latLon.lat
             val  lon = latLonViewModel.latLon.lon
 
@@ -426,14 +451,14 @@ class MainActivity : ComponentActivity(), LocationListener {
 
 
     @Composable
-    fun WebPoi(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
+    fun WebPoi(innerPaddingValues: PaddingValues, onCallBack: () -> Unit, homeMenu: () -> Unit) {
         BoxWithConstraints(modifier = Modifier
             .fillMaxSize()
             .padding(innerPaddingValues)) {
             var id by remember { mutableStateOf("") }
             var searchRes by remember { mutableStateOf("") }
 
-            Row {
+            Column(Modifier.align(Alignment.Center)) {
                 Button(onClick = {
                     val url = "http://10.0.2.2:3000/poi/all"
                     url.httpGet().responseJson { request, response, result ->
@@ -445,7 +470,6 @@ class MainActivity : ComponentActivity(), LocationListener {
                                     val lat = currObj.getString("lat").toDouble()
                                     val lon = currObj.getString("lon").toDouble()
                                     val newPoi = Poi(name = currObj.getString("name"), type = currObj.getString("type"), description = currObj.getString("description"), latitude = lat, longitude = lon)
-
                                     poiViewModel.addPoi(newPoi)
                                     Toast.makeText(this@MainActivity, "Loading Web POIs...", Toast.LENGTH_LONG).show()
                                 }
@@ -465,9 +489,14 @@ class MainActivity : ComponentActivity(), LocationListener {
                             }
                         }
                     }
-                    onCallBack()
+                    homeMenu()
                 }) {
                     Text("View Web POIs")
+                }
+                Button(onClick = {
+                    onCallBack()
+                }) {
+                    Text("Back")
                 }
             }
         }
@@ -475,11 +504,10 @@ class MainActivity : ComponentActivity(), LocationListener {
 
     @Composable
     fun SettingsComposable(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
-
         BoxWithConstraints(modifier = Modifier
             .fillMaxSize()
             .padding(innerPaddingValues)) {
-            Column {
+            Column(Modifier.align(Alignment.TopCenter)) {
                 Text("GPS Location Setting")
 
                 var gpsSwitch by remember { mutableStateOf(true) }
@@ -488,7 +516,9 @@ class MainActivity : ComponentActivity(), LocationListener {
                 } else {
                     Text("Turn off GPS Location")
                 }
-                Row(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Row(modifier = Modifier
+                    .padding(20.dp)
+                    .align(Alignment.CenterHorizontally)) {
                     Switch(checked = gpsSwitch, onCheckedChange = { gpsSwitch=it })
                     if (!gpsSwitch) {
                         onProviderDisabled("GPS Off")
@@ -496,9 +526,43 @@ class MainActivity : ComponentActivity(), LocationListener {
                         onProviderEnabled("GPS On")
                     }
                 }
-                Button(onClick = { onCallBack() }) {
+                Button(onClick = { onCallBack() }, Modifier.align(Alignment.CenterHorizontally)) {
                     Text("Back")
                 }
+            }
+        }
+    }
+
+    @Composable
+    fun WebSaver(innerPaddingValues: PaddingValues, onCallBack: () -> Unit) {
+        BoxWithConstraints(modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPaddingValues)) {
+            var outputText by remember { mutableStateOf("") }
+            val saver = poiViewModel.getPois().last()
+            Button(onClick = {
+                val url = "http://10.0.2.2:3000/poi/create"
+                val postData = listOf("name" to saver.name, "type" to saver.type, "description" to saver.description, "lat" to saver.latitude, "lon" to saver.longitude)
+                url.httpPost(postData).response { request, response, result ->
+                    when(result) {
+                        is Result.Success -> {
+                            outputText = result.get().decodeToString()
+                        }
+                        is Result.Failure -> {
+                            outputText = "Error ${result.error.message}"
+                        }
+                    }
+                }
+            }) {
+                Text("Save Last Added POI to Web")
+            }
+            Button(onClick = {
+                onCallBack()
+            }) {
+                Text("Back")
+            }
+            if (outputText != "") {
+                Toast.makeText(this@MainActivity, "POIs saved to the Web successfully: $outputText", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -507,13 +571,11 @@ class MainActivity : ComponentActivity(), LocationListener {
 @Composable
 fun MapComposable(poi: List<Poi>, load: List<Poi>, geoPoint: GeoPoint, modifier: Modifier) {
     AndroidView(modifier = Modifier, factory = { ctx  -> Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx))
-
         val map1 = MapView(ctx).apply {
             setMultiTouchControls(true)
             setTileSource(TileSourceFactory.MAPNIK)
             controller.setZoom(14.0)
         }
-
         map1
     }, update = { view ->
         view.controller.setCenter(geoPoint)
